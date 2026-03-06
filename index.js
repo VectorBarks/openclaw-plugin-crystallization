@@ -304,8 +304,8 @@ function createPlugin(api, userConfig = {}) {
     }
   }
 
-  if (api?.nightshift?.registerTaskRunner) {
-    api.nightshift.registerTaskRunner('crystallization', async (task, _ctx) => {
+  if (global.__ocNightshift?.registerTaskRunner) {
+    global.__ocNightshift.registerTaskRunner('crystallization', async (task, _ctx) => {
       const payload = task?.payload;
       const candidateIds = Array.isArray(payload)
         ? payload
