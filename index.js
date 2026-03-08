@@ -317,7 +317,7 @@ function createPlugin(api, userConfig = {}) {
   return {
     name: 'crystallization',
     hooks: {
-      heartbeat: async (_ctx) => runCrystallization(),
+      agent_end_crystallization: async (_ctx) => runCrystallization(),
       agent_end: async (ctx) => onAgentEnd(ctx)
     },
     runCrystallization,
@@ -349,7 +349,7 @@ module.exports = {
     const plugin = createPlugin(api, userConfig);
     
     // Register hooks
-    api.on('heartbeat', plugin.hooks.heartbeat);
+    api.on('agent_end', plugin.hooks.agent_end_crystallization);
     api.on('agent_end', plugin.hooks.agent_end);
     
     api.logger.info('Crystallization plugin registered — converts growth vectors to permanent traits');
