@@ -345,7 +345,12 @@ module.exports = {
   },
 
   register(api) {
-    const userConfig = api.pluginConfig || {};
+    // Merge: pluginConfig (from openclaw.json) overrides local config.json
+    let localConfig = {};
+    try {
+      localConfig = require('./config.json');
+    } catch (e) { /* no local config.json */ }
+    const userConfig = { ...localConfig, ...(api.pluginConfig || {}) };
     const plugin = createPlugin(api, userConfig);
     
     // Register hooks
