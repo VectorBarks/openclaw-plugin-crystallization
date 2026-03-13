@@ -22,6 +22,14 @@ function mergeConfig(userConfig = {}) {
       ...defaultConfig.output,
       ...(userConfig.output || {})
     },
+    output_changelog: {
+      ...(defaultConfig.output_changelog || {}),
+      ...(userConfig.output_changelog || {}),
+      growthFeed: {
+        ...(defaultConfig.output_changelog?.growthFeed || {}),
+        ...(userConfig.output_changelog?.growthFeed || {})
+      }
+    },
     prompts: {
       ...defaultConfig.prompts,
       ...(userConfig.prompts || {})
@@ -31,6 +39,68 @@ function mergeConfig(userConfig = {}) {
       ...(userConfig.ollama || {})
     }
   };
+}
+
+/**
+ * Append a crystallization event to the changelog file.
+ * Format: date, trait, trigger principle, source count, description.
+ */
+async function appendChangelog(config, traitRecord) {
+  const changelogPath = config.output_changelog?.changelogPath;
+  if (!changelogPath) return;
+
+  const resolvedPath = path.resolve(__dirname, changelogPath);
+
+  const date = new Date().toISOString().split('T')[0];
+  const entry = [
+    '',
+    `### ${date} — ${traitRecord.pattern || 'unknown'}`,
+    `- **Trait:** ${traitRecord.text}`,
+    `- **Principle:** ${traitRecord.principle}`,
+    `- **Sources:** ${traitRecord.demonstratedCount} growth vectors`,
+    `- **Approved by:** ${traitRecord.approvedBy || 'user'}`,
+    ''
+  ].join('\n');
+
+  try {
+    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+    await fs.appendFile(resolvedPath, entry);
+  } catch (err) {
+    // Silent fail — changelog is supplementary
+  }
+}
+
+/**
+ * Optionally notify a Telegram topic about a new crystallized trait.
+ */
+async function notifyGrowthFeed(config, traitRecord) {
+  const feed = config.output_changelog?.growthFeed;
+  if (!feed?.enabled || !feed?.chatId) return;
+
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) return;
+
+    const message = [
+      '🔮 *Neuer Charakterzug kristallisiert*',
+      '',
+      `> ${traitRecord.text}`,
+      '',
+      `Prinzip: ${traitRecord.principle} | Muster: ${traitRecord.pattern}`,
+      `Quellen: ${traitRecord.demonstratedCount} Growth Vectors`
+    ].join('\n');
+
+    const params = new URLSearchParams({
+      chat_id: feed.chatId,
+      text: message,
+      parse_mode: 'Markdown'
+    });
+    if (feed.threadId) params.set('message_thread_id', feed.threadId);
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage?${params}`, { method: 'GET' });
+  } catch (err) {
+    // Silent fail — notification is optional
+  }
 }
 
 async function ensureJsonArray(filePath) {
@@ -301,6 +371,10 @@ function createPlugin(api, userConfig = {}) {
       traits.push(traitRecord);
       await writeJson(traitsPath, traits);
       await writeJson(vectorsPath, approvedVectors);
+
+      // Changelog + Growth Feed
+      await appendChangelog(config, traitRecord);
+      await notifyGrowthFeed(config, traitRecord);
     }
   }
 

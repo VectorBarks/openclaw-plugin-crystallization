@@ -155,6 +155,49 @@ This plugin is one piece of a six-plugin architecture for agent self-awareness:
 
 See [openclaw-metacognitive-suite](https://github.com/CoderofTheWest/openclaw-metacognitive-suite) for the full picture.
 
+## Changelog & Growth Feed
+
+When a trait is approved and crystallized, two additional outputs are generated:
+
+### Changelog
+
+Each crystallized trait is appended to a markdown changelog file. The changelog provides a human-readable history of character evolution over time.
+
+| Setting | Default | What It Does |
+|---|---|---|
+| `output_changelog.changelogPath` | `"../../workspace/memory/soul/changelog.md"` | Path to changelog file (relative to plugin dir) |
+
+Entry format:
+```markdown
+### 2026-03-13 — directness
+- **Trait:** I default to concrete examples over abstract explanations.
+- **Principle:** groundedness
+- **Sources:** 4 growth vectors
+- **Approved by:** user
+```
+
+### Growth Feed (Telegram Notification)
+
+Optionally notify a Telegram topic when a new trait crystallizes. Useful for tracking character growth in a dedicated channel.
+
+| Setting | Default | What It Does |
+|---|---|---|
+| `output_changelog.growthFeed.enabled` | `false` | Enable Telegram notifications |
+| `output_changelog.growthFeed.chatId` | `""` | Telegram chat ID for notifications |
+| `output_changelog.growthFeed.threadId` | `""` | Telegram thread/topic ID (optional) |
+
+Requires `TELEGRAM_BOT_TOKEN` environment variable.
+
+## Cron Integration
+
+The following crons complement the crystallization pipeline:
+
+| Cron | Schedule | Purpose |
+|---|---|---|
+| `metacog-monday-review` | Mon 09:30 CET | Reviews crystallization candidates with approval buttons |
+| `metacog-weekly-growth-check` | Fri 18:00 CET | Checks if new growth vectors were created |
+| `metacog-monthly-calibration` | 1st Mon/month 10:00 CET | Chain-wide calibration reminder |
+
 ## License
 
 MIT
