@@ -272,13 +272,16 @@ function createPlugin(api, userConfig = {}) {
       : scanner.findCandidates(normalized, config);
 
     if (sourceCandidates.length < (config.crystallization.minVectors || 3)) {
+      if (api?.logger) api.logger.info(`[Crystallization] insufficient_candidates: ${sourceCandidates.length}/${config.crystallization.minVectors || 3}`);
       return { status: 'insufficient_candidates', count: sourceCandidates.length };
     }
 
+    if (api?.logger) api.logger.info(`[Crystallization] Processing ${sourceCandidates.length} candidates through principle alignment`);
     const alignment = await crystallize.checkPrincipleAlignment(sourceCandidates, config);
     const principle = crystallize.chooseDominantPrinciple(alignment);
 
     if (!principle) {
+      if (api?.logger) api.logger.info(`[Crystallization] no_principle_alignment (alignment results: ${alignment.length})`);
       return { status: 'no_principle_alignment' };
     }
 
@@ -286,11 +289,14 @@ function createPlugin(api, userConfig = {}) {
     const alignedVectors = sourceCandidates.filter((v) => alignedIds.has(v.id));
 
     if (alignedVectors.length < (config.crystallization.minVectors || 3)) {
+      if (api?.logger) api.logger.info(`[Crystallization] insufficient_aligned_vectors: ${alignedVectors.length} for principle "${principle}"`);
       return { status: 'insufficient_aligned_vectors', count: alignedVectors.length };
     }
 
+    if (api?.logger) api.logger.info(`[Crystallization] Synthesizing trait from ${alignedVectors.length} vectors, principle: ${principle}`);
     const synthesis = await crystallize.synthesizeTrait(alignedVectors, principle, config);
     if (!synthesis.trait) {
+      if (api?.logger) api.logger.info(`[Crystallization] empty_synthesis — LLM returned no trait`);
       return { status: 'empty_synthesis' };
     }
 
@@ -315,6 +321,8 @@ function createPlugin(api, userConfig = {}) {
     });
 
     await writeVectorsFile(vectorsPath, updatedVectors, format);
+
+    if (api?.logger) api.logger.info(`[Crystallization] ✨ Proposed trait: "${synthesis.trait}" (principle: ${principle}, vectors: ${alignedVectors.length})`);
 
     const approvalMessage = prompt.generateApprovalRequest({
       template: config.prompts.approvalRequest,
