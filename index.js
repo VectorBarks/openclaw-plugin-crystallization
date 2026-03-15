@@ -107,12 +107,56 @@ async function ensureJsonArray(filePath) {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed)) return parsed;
+    // Support {vectors: [...], candidates: [...]} format from metabolism plugin
+    if (parsed && typeof parsed === 'object') {
+      const vectors = parsed.vectors || [];
+      const candidates = parsed.candidates || [];
+      return [...vectors, ...candidates];
+    }
+    return [];
   } catch (err) {
     if (err.code === 'ENOENT') {
       return [];
     }
     throw err;
+  }
+}
+
+/**
+ * Read growth-vectors.json preserving the original wrapper format.
+ */
+async function readVectorsFile(filePath) {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { format: 'array', data: parsed };
+    if (parsed && typeof parsed === 'object' && (parsed.vectors || parsed.candidates)) {
+      return {
+        format: 'object',
+        data: [...(parsed.vectors || []), ...(parsed.candidates || [])],
+        raw: parsed
+      };
+    }
+    return { format: 'array', data: [] };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { format: 'array', data: [] };
+    throw err;
+  }
+}
+
+/**
+ * Write vectors back preserving original format.
+ */
+async function writeVectorsFile(filePath, vectors, originalFormat) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  if (originalFormat === 'object') {
+    // Separate back into vectors (with inquiryId) and candidates (without)
+    const vecs = vectors.filter(v => v.inquiryId);
+    const cands = vectors.filter(v => !v.inquiryId);
+    await fs.writeFile(filePath, JSON.stringify({ vectors: vecs, candidates: cands }, null, 2));
+  } else {
+    await fs.writeFile(filePath, JSON.stringify(vectors, null, 2));
   }
 }
 
@@ -210,10 +254,22 @@ function createPlugin(api, userConfig = {}) {
     }
 
     const vectorsPath = config.output.vectorsPath;
-    const vectors = await ensureJsonArray(vectorsPath);
+    const { format, data: vectors } = await readVectorsFile(vectorsPath);
+
+    // Normalize vectors: ensure each has a .text field for the LLM prompt
+    const normalized = vectors.map(v => {
+      if (!v.text && v.insight) v.text = v.insight;
+      if (!v.text && v.description) v.text = v.description;
+      if (!v.text && v.integration_hypothesis) v.text = v.integration_hypothesis;
+      // Ensure created field exists (scanner needs it)
+      if (!v.created && v.detected) v.created = v.detected;
+      if (!v.created && v.completed) v.created = v.completed;
+      return v;
+    });
+
     const sourceCandidates = Array.isArray(candidateIds) && candidateIds.length
-      ? scanner.selectCandidatesById(vectors, candidateIds)
-      : scanner.findCandidates(vectors, config);
+      ? scanner.selectCandidatesById(normalized, candidateIds)
+      : scanner.findCandidates(normalized, config);
 
     if (sourceCandidates.length < (config.crystallization.minVectors || 3)) {
       return { status: 'insufficient_candidates', count: sourceCandidates.length };
@@ -241,7 +297,7 @@ function createPlugin(api, userConfig = {}) {
     const nowIso = new Date().toISOString();
     const byId = new Map(alignedVectors.map((v) => [v.id, v]));
 
-    const updatedVectors = vectors.map((vector) => {
+    const updatedVectors = normalized.map((vector) => {
       if (!byId.has(vector.id)) {
         return vector;
       }
@@ -258,7 +314,7 @@ function createPlugin(api, userConfig = {}) {
       };
     });
 
-    await writeJson(vectorsPath, updatedVectors);
+    await writeVectorsFile(vectorsPath, updatedVectors, format);
 
     const approvalMessage = prompt.generateApprovalRequest({
       template: config.prompts.approvalRequest,
@@ -291,7 +347,7 @@ function createPlugin(api, userConfig = {}) {
 
     const vectorsPath = config.output.vectorsPath;
     const traitsPath = config.output.traitsPath;
-    const vectors = await ensureJsonArray(vectorsPath);
+    const { format, data: vectors } = await readVectorsFile(vectorsPath);
     const pending = latestPendingGroup(vectors);
 
     if (!pending.length) {
@@ -317,7 +373,7 @@ function createPlugin(api, userConfig = {}) {
         };
       });
 
-      await writeJson(vectorsPath, rejected);
+      await writeVectorsFile(vectorsPath, rejected, format);
       return;
     }
 
@@ -338,7 +394,7 @@ function createPlugin(api, userConfig = {}) {
         };
       });
 
-      await writeJson(vectorsPath, edited);
+      await writeVectorsFile(vectorsPath, edited, format);
       return;
     }
 
@@ -370,7 +426,7 @@ function createPlugin(api, userConfig = {}) {
 
       traits.push(traitRecord);
       await writeJson(traitsPath, traits);
-      await writeJson(vectorsPath, approvedVectors);
+      await writeVectorsFile(vectorsPath, approvedVectors, format);
 
       // Changelog + Growth Feed
       await appendChangelog(config, traitRecord);
