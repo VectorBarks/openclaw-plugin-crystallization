@@ -1,0 +1,9 @@
+{
+  "_comment": "Private overrides for crystallization plugin. Copy to config.local.json and customize.",
+  "gates": {
+    "minObservations": 5
+  },
+  "output": {
+    "targetDir": "/path/to/traits"
+  }
+}

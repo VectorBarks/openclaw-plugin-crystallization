@@ -483,12 +483,20 @@ module.exports = {
   },
 
   register(api) {
-    // Merge: pluginConfig (from openclaw.json) overrides local config.json
+    // Merge: pluginConfig (from openclaw.json) overrides local config.json + config.local.json
     let localConfig = {};
     try {
       localConfig = require('./config.json');
     } catch (e) { /* no local config.json */ }
-    const userConfig = { ...localConfig, ...(api.pluginConfig || {}) };
+    let localOverrides = {};
+    try {
+      const fsSync = require('fs');
+      const localPath = require('path').join(__dirname, 'config.local.json');
+      if (fsSync.existsSync(localPath)) {
+        localOverrides = JSON.parse(fsSync.readFileSync(localPath, 'utf8'));
+      }
+    } catch (e) { /* no config.local.json or parse error — ignore */ }
+    const userConfig = { ...localConfig, ...localOverrides, ...(api.pluginConfig || {}) };
     const plugin = createPlugin(api, userConfig);
     
     // Register hooks
