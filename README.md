@@ -83,6 +83,18 @@ This plugin depends on **openclaw-plugin-nightshift** (for scheduling crystalliz
 
 ## Configuration Reference
 
+
+### Local Configuration Overrides
+
+For private or deployment-specific settings, create a `config.local.json` in the plugin directory. This file is git-ignored and overlays values from `config.default.json` without modifying tracked files.
+
+```bash
+cp config.local.example.json config.local.json
+# Edit config.local.json with your overrides
+```
+
+The merge order is: `config.default.json` → `config.local.json` → `openclaw.json` plugin config. Later sources override earlier ones.
+
 Override any defaults in your `openclaw.json` plugin config:
 
 ```json
