@@ -235,13 +235,15 @@ function latestPendingGroup(vectors) {
   return pending.filter((v) => Date.parse(v?.crystallization?.proposedAt || 0) === latestTimestamp);
 }
 
-async function sendMessage(api, message) {
+async function sendMessage(api, message, buttons) {
+  const params = { message };
+  if (buttons) params.buttons = buttons;
   if (api?.message?.send) {
-    await api.message.send({ message });
+    await api.message.send(params);
     return;
   }
   if (api?.messages?.send) {
-    await api.messages.send({ message });
+    await api.messages.send(params);
   }
 }
 
@@ -331,7 +333,20 @@ function createPlugin(api, userConfig = {}) {
       count: alignedVectors.length
     });
 
-    await sendMessage(api, approvalMessage);
+    // Find first pending vector ID for button callback_data
+    const firstPendingId = updatedVectors.find(v => v.crystallization?.status === 'pending_review')?.id || 'unknown';
+    const approvalButtons = [
+      [
+        { text: '✅ Ersetzen', callback_data: `crystal_approve_${firstPendingId}` },
+        { text: '➕ Ergänzen', callback_data: `crystal_approve_add_${firstPendingId}` }
+      ],
+      [
+        { text: '⏭ Skippen', callback_data: `crystal_skip_${firstPendingId}` },
+        { text: '❌ Ablehnen', callback_data: `crystal_reject_${firstPendingId}` }
+      ]
+    ];
+
+    await sendMessage(api, approvalMessage, approvalButtons);
 
     return {
       status: 'pending_review',
